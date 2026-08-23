@@ -35,6 +35,13 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 DB_PATH = os.getenv('DB_PATH', 'scores.db')
 
 def init_db():
+    # Если папка для базы ещё не создана (актуально для Volume на Railway,
+    # когда путь примонтирован, но самой поддиректории может не быть) —
+    # создаём её сами, чтобы sqlite3.connect не падал с OperationalError.
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
