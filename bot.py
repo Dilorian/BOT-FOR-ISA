@@ -451,10 +451,21 @@ class VerificationView(discord.ui.View):
         category = request[4]
         amount = request[6]
         
-        # Начисляем баллы
-        user = bot.get_user(user_id)
-        if user:
-            score_bot.add_player(user_id, user.name)
+        # Начисляем баллы.
+        # ВАЖНО: bot.get_user() ищет только в локальном кэше и часто
+        # возвращает None для пользователей, которых бот ещё не видел
+        # "вживую" — тогда игрок не создавался в БД и баллы терялись.
+        # bot.fetch_user() всегда идёт в Discord API и работает надёжно.
+        try:
+            user = await bot.fetch_user(user_id)
+        except discord.NotFound:
+            user = None
+        
+        # Создаём игрока в любом случае, даже если Discord API не отдал
+        # объект пользователя — иначе update_score ниже обновит
+        # несуществующую строку и баллы не сохранятся.
+        username = user.name if user else f"User {user_id}"
+        score_bot.add_player(user_id, username)
         
         score_bot.update_score(user_id, category, amount)
         
@@ -557,7 +568,10 @@ class DenyReasonModal(discord.ui.Modal, title="Причина отклонени
         c.execute("SELECT user_id FROM pending_requests WHERE id=?", (self.request_id,))
         result = c.fetchone()
         if result:
-            user = bot.get_user(result[0])
+            try:
+                user = await bot.fetch_user(result[0])
+            except discord.NotFound:
+                user = None
             if user:
                 try:
                     player_embed = discord.Embed(
